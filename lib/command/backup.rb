@@ -30,7 +30,7 @@ module Command
     end
 
     def create_backup_filename(data)
-      Helper.replace_filename_special_chars(data["title"]) + "_" + Time.now.strftime("%Y%m%d%H%M%S") + ".zip"
+      Helper.truncate_path(Helper.replace_filename_special_chars(data["title"])) + "_" + Time.now.strftime("%Y%m%d%H%M%S") + ".zip"
     end
 
     def create_backup(data)

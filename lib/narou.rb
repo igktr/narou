@@ -35,7 +35,7 @@ module Narou
   @@is_web = false
 
   def last_commit_year
-    2016
+    2017
   end
 
   def get_root_dir
@@ -294,7 +294,7 @@ module Narou
   #
   def latest_version
     response = `gem search ^narou$`.split("\n")
-    if response.last =~ /\Anarou \((.+?)\)\z/
+    if response.last =~ /\Anarou \(([0-9.]+).*?\)\z/
       $1
     end
   end

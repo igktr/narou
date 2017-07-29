@@ -33,6 +33,10 @@ converter "<%= file_title.gsub('"', '\"') %>" do
     #  io.string.gsub!(/［＃挿絵（.+?）入る］/, "")
     # end
 
+    # AozoraEpub3 が挿絵で落ちるので全部削除。
+    io.string.gsub!(/［＃挿絵（.+?）入る］/, "")
+
+
     io
   end
 end

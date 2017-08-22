@@ -189,6 +189,7 @@ module Command
               data["tags"] = tags - [Narou::MODIFIED_TAG] if tags.include?(Narou::MODIFIED_TAG)
               data["last_check_date"] = Time.now
             end
+
             result = downloader.start_download
             case result.status
             when :ok

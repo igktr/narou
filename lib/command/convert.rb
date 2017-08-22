@@ -155,6 +155,7 @@ module Command
         error "有効な端末名がひとつもありませんでした"
         exit Narou::EXIT_ERROR_CODE
       end
+
       device_names.each do |name|
         @device = Narou.get_device(name)
         if name
@@ -164,6 +165,7 @@ module Command
         hook_call(:change_settings)
         convert_novels(argv)
       end
+
       # device の設定に戻す
       if @multi_device
         device = Narou.get_device

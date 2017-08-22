@@ -189,10 +189,10 @@ module Command
               data["tags"] = tags - [Narou::MODIFIED_TAG] if tags.include?(Narou::MODIFIED_TAG)
               data["last_check_date"] = Time.now
             end
-
             result = downloader.start_download
             case result.status
             when :ok
+              puts "ID:#{data["id"]}　#{data["title"]} の更新を取得しました"
               delete_modified_tag.call
               trigger(:success, data)
               if @options["no-convert"] ||
@@ -222,6 +222,9 @@ module Command
             convert_status = Convert.execute!(convert_argv)
             if convert_status > 0
               # 変換が失敗したか、中断された
+puts "------------------------------------"
+puts "-------- 変換に失敗しました --------"
+puts "------------------------------------"
               data["_convert_failure"] = true
               # 中断された場合には残りのアップデートも中止する
               raise Interrupt if convert_status == Narou::EXIT_INTERRUPT
@@ -237,6 +240,7 @@ module Command
         save_log(update_log)
         Database.instance.save_database
       end
+      puts "アップデートを完了しました"
 
       exit mistook_count if mistook_count > 0
     rescue Interrupt
@@ -262,9 +266,12 @@ module Command
       return unless @options["logging"]
       create_log_dir
       now = Time.now
-      logname = File.join(log_dirname, LOG_FILENAME_FORMAT % now.strftime("%Y%m%d_%H%M%S"))
-      File.open(logname, "w:UTF-8") do |fp|
+#      logname = File.join(log_dirname, LOG_FILENAME_FORMAT % now.strftime("%Y%m%d_%H%M%S"))
+      logname = File.join(log_dirname, LOG_FILENAME_FORMAT % now.strftime("%Y%m%d"))
+      File.open(logname, "a:UTF-8") do |fp|
+	fp.puts "---"
         fp.puts "--- ログ出力日時 #{now.strftime("%Y/%m/%d %H:%M:%S")} ---"
+	fp.puts "---"
         fp.puts log
       end
       remove_old_log

@@ -19,6 +19,10 @@ module Command
 
     @@sending_error_list = []
 
+    LOG_DIR_NAME = "log"
+    LOG_NUM_LIMIT = 30   # ログの保存する上限数
+    LOG_FILENAME_FORMAT = "convert_log_%s.txt"
+
     def self.display_sending_error_list
       puts
       puts "-" * 79
@@ -151,7 +155,6 @@ module Command
         error "有効な端末名がひとつもありませんでした"
         exit Narou::EXIT_ERROR_CODE
       end
-
       device_names.each do |name|
         @device = Narou.get_device(name)
         if name
@@ -161,7 +164,6 @@ module Command
         hook_call(:change_settings)
         convert_novels(argv)
       end
-
       # device の設定に戻す
       if @multi_device
         device = Narou.get_device

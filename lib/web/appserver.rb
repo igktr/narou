@@ -20,115 +20,7 @@ require_relative "../inventory"
 require_relative "worker"
 require_relative "pushserver"
 require_relative "settingmessages"
-
-module Narou::ServerHelpers
-  #
-  # タグをHTMLで装飾する
-  #
-  def decorate_tags(tags)
-    tags.sort.map do |tag|
-      %!<span class="tag label label-#{Command::Tag.get_color(tag)}" data-tag="#{escape_html(tag)}">#{escape_html(tag)}</span>!
-    end.join(" ")
-  end
-
-  #
-  # タグをHTMLで装飾する(除外タグ指定用)
-  #
-  def decorate_exclusion_tags(tags)
-    tags.sort.map do |tag|
-      %!<span class="tag label label-#{Command::Tag.get_color(tag)}" data-exclusion-tag="#{escape_html(tag)}">^tag:#{escape_html(tag)}</span>!
-    end.join(" ")
-  end
-
-  #
-  # Rubyバージョンを構築
-  #
-  def build_ruby_version
-    begin
-      `"#{RbConfig.ruby}" -v`.strip
-    rescue
-      config = RbConfig::CONFIG
-      "ruby #{RUBY_VERSION}p#{config["PATCHLEVEL"]} [#{RUBY_PLATFORM}]"
-    end
-  end
-
-  #
-  # 有効な novel ID だけの配列を生成する
-  # ID が指定されなかったか、１件も存在しない場合は nil を返す
-  #
-  def select_valid_novel_ids(ids)
-    return nil unless ids.kind_of?(Array)
-    result = ids.select do |id|
-      id =~ /^\d+$/
-    end
-    result.empty? ? nil : result
-  end
-
-  #
-  # フォーム情報の真偽値データを実際のデータに変換
-  #
-  def convert_on_off_to_boolean(str)
-    case str
-    when "on"
-      true
-    when "off"
-      false
-    else
-      nil
-    end
-  end
-
-  #
-  # nil true false を nil on off という文字列に変換
-  #
-  def convert_boolean_to_on_off(bool)
-    case bool
-    when TrueClass
-      "on"
-    when FalseClass
-      "off"
-    else
-      "nil"
-    end
-  end
-
-  #
-  # HTMLエスケープヘルパー
-  #
-  def h(text)
-    Rack::Utils.escape_html(text)
-  end
-
-  #
-  # 与えられたデータが真偽値だった場合、設定画面用に「はい」「いいえ」に変換する
-  # 真偽値ではなかった場合、そのまま返す
-  #
-  def value_to_msg(value)
-    case value
-    when TrueClass
-      "はい"
-    when FalseClass
-      "いいえ"
-    else
-      value
-    end
-  end
-
-  def notepad_text_path
-    File.join(Narou.local_setting_dir, "notepad.txt")
-  end
-
-  def query_to_boolean(value, default: false)
-    case value
-    when "1", 1, "true", true
-      true
-    when "0", 0, "false", false
-      false
-    else
-      default
-    end
-  end
-end
+require_relative "server_helpers"
 
 class Narou::AppServer < Sinatra::Base
   register Sinatra::Reloader if $development
@@ -273,11 +165,12 @@ class Narou::AppServer < Sinatra::Base
   # とりあえずDigest認証のみ
   def setup_server_authentication
     auth = Inventory.load("global_setting", :global).group("server-digest-auth")
-    return unless auth.enable
-
     user = auth.user
     hashed = auth.hashed_password
     passwd = hashed || auth.password
+
+    # enableかつユーザー名とパスワードが設定されている時のみ認証を有効にする
+    return unless auth.enable && user && passwd
 
     self.class.class_exec do
       use Rack::Auth::Digest::MD5, { realm: "narou.rb", opaque: "", passwords_hashed: hashed } do |username|
@@ -292,13 +185,13 @@ class Narou::AppServer < Sinatra::Base
 
   before do
     headers "Cache-Control" => "no-cache" if $development
-    @bootstrap_theme = case params["theme"]
+    @bootstrap_theme = case params["webui.theme"]
                        when nil
                          Narou.get_theme
                        when ""   # 環境設定画面で未設定が選択された時
                          nil
                        else
-                         params["theme"]
+                         params["webui.theme"]
                        end
     Narou::Worker.push_as_system_worker do
       Inventory.clear
@@ -518,9 +411,9 @@ class Narou::AppServer < Sinatra::Base
   get "/novels/:id/download" do
     device = Narou.get_device
     ext = device ? device.ebook_file_ext : ".epub"
-    path = Narou.get_ebook_file_path(@id, ext)
-    if File.exist?(path)
-      send_file(path, filename: File.basename(path), type: "application/octet-stream")
+    paths = Narou.get_ebook_file_paths(@id, ext)
+    if !paths.empty? && File.exist?(paths[0])
+      send_file(paths[0], filename: File.basename(paths[0]), type: "application/octet-stream")
     else
       not_found
     end
@@ -566,7 +459,12 @@ class Narou::AppServer < Sinatra::Base
           sitename: data["sitename"],
           toc_url: data["toc_url"],
           novel_type: data["novel_type"] == 2 ? "短編" : "連載",
-          tags: (tags.empty? ? "" : decorate_tags(tags) + '&nbsp;<span class="tag label label-white" data-tag="" data-toggle="tooltip" title="タグ検索を解除">&nbsp;</span>'),
+          tags: if tags.empty?
+                  ""
+                else
+                  %!#{decorate_tags(tags)}&nbsp;<span class="tag tag-reset label label-white"! +
+                  %!data-tag="" data-toggle="tooltip" title="タグ検索を解除">&nbsp;</span>!
+                end,
           status: [
             is_frozen ? "凍結" : nil,
             tags.include?("end") ? "完結" : nil,
@@ -579,6 +477,7 @@ class Narou::AppServer < Sinatra::Base
           # 掲載話数
           general_all_no: data["general_all_no"],
           last_check_date: data["last_check_date"].tap { |m| break m.to_i if m },
+          length: data["length"],
         }
       end.compact
     json_objects[:recordsTotal] = json_objects[:data].size
@@ -631,8 +530,10 @@ class Narou::AppServer < Sinatra::Base
     end
     Narou::Worker.push do
       cmd = Command::Update.new
-      cmd.on(:success) do
-        @@push_server.send_all(:"table.reload")
+      if table_reload_timing == "every"
+        cmd.on(:success) do
+          @@push_server.send_all(:"table.reload")
+        end
       end
       cmd.execute!([ids, opt_arguments].flatten)
       @@push_server.send_all(:"table.reload")
@@ -651,8 +552,10 @@ class Narou::AppServer < Sinatra::Base
     pass if tag_params.empty?
     Narou::Worker.push do
       cmd = Command::Update.new
-      cmd.on(:success) do
-        @@push_server.send_all(:"table.reload")
+      if table_reload_timing == "every"
+        cmd.on(:success) do
+          @@push_server.send_all(:"table.reload")
+        end
       end
       cmd.execute!(tag_params)
       @@push_server.send_all(:"table.reload")
@@ -763,7 +666,7 @@ class Narou::AppServer < Sinatra::Base
 
   get "/api/tag_list" do
     result =
-      '<div><span class="tag label label-default" data-tag="">タグ検索を解除</span></div>' \
+      '<div><span class="tag tag-reset label label-default" data-tag="">タグ検索を解除</span></div>' \
       '<div class="text-muted" style="font-size:10px">Altキーを押しながらで除外検索</div>'
     tagname_list = Command::Tag.get_tag_list.keys
     tagname_list.sort.each do |tagname|

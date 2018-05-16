@@ -32,12 +32,6 @@ Gem::Specification.new do |gem|
   install_message = <<-EOS
 #{"*" * 60}
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  Ruby2.2の公式サポートが2018年3月末で終了することに合わせて、
-  Narou.rbも2018年3月末でRuby2.2を動作対象から外します。
-  早めにRuby2.4などの新しいバージョンへの移行をオススメします。
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 3.1.11: 2017/11/21
 ------------------
 #### 追加機能
@@ -86,5 +80,6 @@ Gem::Specification.new do |gem|
   gem.add_runtime_dependency 'systemu', '~> 2.6', '>= 2.6.5'
   gem.add_runtime_dependency 'erubis', '~> 2.7'
   gem.add_runtime_dependency 'open_uri_redirections', '~> 0.2', '>= 0.2.1'
+  gem.add_runtime_dependency 'activesupport', '~> 5.2'
 end
 

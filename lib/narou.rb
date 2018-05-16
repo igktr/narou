@@ -5,6 +5,7 @@
 
 require "fileutils"
 require "memoist"
+require "active_support/core_ext/object/blank"
 require_relative "helper"
 require_relative "inventory"
 if Helper.engine_jruby?
@@ -23,6 +24,7 @@ module Narou
   EXIT_INTERRUPT = 126
   EXIT_REQUEST_REBOOT = 125
   MODIFIED_TAG = "modified"
+  LINE_HEIGHT_DEFAULT = 1.6 # 単位em
 
   UPDATE_SORT_KEYS = {
     "id" => "ID", "last_update" => "更新日", "title" => "タイトル", "author" => "作者名",
@@ -35,7 +37,7 @@ module Narou
   @@is_web = false
 
   def last_commit_year
-    2017
+    2018
   end
 
   def get_root_dir
@@ -199,7 +201,15 @@ module Narou
   #
   def create_novel_filename(novel_data, ext = "")
     filename_to_ncode = Inventory.load("local_setting")["convert.filename-to-ncode"]
-    if filename_to_ncode
+    novel_setting =
+      if novel_data["id"]
+        NovelSetting.load(novel_data["id"])
+      else
+        OpenStruct.new
+      end
+    if novel_setting.output_filename.present?
+      %!#{novel_setting.output_filename}#{ext}!
+    elsif filename_to_ncode
       ncode, domain = novel_data["ncode"], novel_data["domain"]
       if !ncode || !domain
         id = novel_data["id"]
@@ -213,22 +223,39 @@ module Narou
       serialized_domain = domain.to_s.gsub(".", "_")
       %!#{serialized_domain}_#{ncode}#{ext}!
     else
-      author, title = %w(author title).map { |k|
-        Helper.replace_filename_special_chars(novel_data[k], true)
-      }
+      author = Helper.replace_filename_special_chars(
+        novel_setting.novel_author.presence || novel_data["author"],
+        true
+      )
+      title = Helper.replace_filename_special_chars(
+        novel_setting.novel_title.presence || novel_data["title"],
+        true
+      )
       "[#{author}] #{title}#{ext}"
     end
   end
 
-  def get_mobi_path(target)
-    get_ebook_file_path(target, ".mobi")
+  def get_mobi_paths(target)
+    get_ebook_file_paths(target, ".mobi")
   end
 
-  def get_ebook_file_path(target, ext)
+  def get_ebook_file_paths(target, ext)
     data = Downloader.get_data_by_target(target)
     return nil unless data
     dir = Downloader.get_novel_data_dir_by_target(target)
-    File.join(dir, create_novel_filename(data, ext))
+    fname = create_novel_filename(data, ext)
+    base = File.basename(fname, ext)
+    get_ebook_file_paths_from_components(dir, base, ext)
+  end
+
+  def get_ebook_file_paths_from_components(dir, base, ext)
+    paths = [File.join(dir, "#{base}#{ext}")]
+    index = 2
+    while File.exist?(path = File.join(dir, "#{base}_#{index}#{ext}"))
+      paths.push(path)
+      index += 1
+    end
+    paths
   end
 
   def get_misc_dir
@@ -262,7 +289,7 @@ module Narou
   end
 
   def get_theme
-    Inventory.load("local_setting")["theme"]
+    Inventory.load("local_setting")["webui.theme"]
   end
 
   def get_theme_dir(name = nil)
@@ -310,6 +337,11 @@ module Narou
     File.join(File.dirname(Narou.get_aozoraepub3_path), "kindlegen#{postfix}")
   end
   memoize :kindlegen_path
+
+  def line_height
+    global_setting = Inventory.load("global_setting", :global)
+    global_setting["line-height"] || LINE_HEIGHT_DEFAULT
+  end
 
  end
 end

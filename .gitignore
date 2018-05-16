@@ -29,6 +29,7 @@ misc/
 hotentry/
 replace.txt
 tags
+trace_dump.txt
 
 \#*\#
 
@@ -60,4 +61,5 @@ spec/reports
 test/tmp
 test/version_tmp
 tmp
+document
 

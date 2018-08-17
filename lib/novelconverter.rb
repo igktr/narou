@@ -632,16 +632,18 @@ class NovelConverter
     else
       array_of_subtitles = [subtitles]
     end
+    toc["story"] = @converter.convert(toc["story"], "story")
+    site_setting = SiteSetting.find(toc["toc_url"])
+    html = HTML.new
+    html.strip_decoration_tag = @setting.enable_strip_decoration_tag
+    html.set_illust_setting(
+      current_url: site_setting["illust_current_url"],
+      grep_pattern: site_setting["illust_grep_pattern"]
+    )
     array_of_converted_text = []
     array_of_subtitles.each_with_index do |sliced_subtitles, index|
       @converter.subtitles = sliced_subtitles
-      toc["story"] = @converter.convert(toc["story"], "story")
-      html = HTML.new
-      html.strip_decoration_tag = @setting.enable_strip_decoration_tag
-      site_setting = SiteSetting.find(toc["toc_url"])
-      html.set_illust_setting({ current_url: site_setting["illust_current_url"],
-                                grep_pattern: site_setting["illust_grep_pattern"] })
-
+      html.clear
       sections = subtitles_to_sections(sliced_subtitles, html)
       array_of_converted_text.push(
         create_novel_text_by_template(
@@ -718,9 +720,10 @@ class NovelConverter
 
   def inspect_novel(array_of_text)
     if @setting.enable_inspect
-      text = array_of_text.flatten
-      @inspector.inspect_end_touten_conditions(text)   # 行末読点の現在状況を調査する
-      @inspector.countup_return_in_brackets(text)      # カギ括弧内の改行状況を調査する
+      array_of_text.each do |text|
+        @inspector.inspect_end_touten_conditions(text)   # 行末読点の現在状況を調査する
+        @inspector.countup_return_in_brackets(text)      # カギ括弧内の改行状況を調査する
+      end
     end
 
     if !@display_inspector

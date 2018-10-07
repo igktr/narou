@@ -1,4 +1,5 @@
-﻿# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -55,7 +56,7 @@ class ConverterBase
     @request_insert_blank_next_line = false
     @request_skip_output_line = false
     @before_line = ""
-    @delay_outputs_buffer = ""
+    @delay_outputs_buffer = +""
     @in_comment_block = false
     @english_sentences = []
     @url_list = []
@@ -474,6 +475,13 @@ class ConverterBase
     end
   end
 
+  def convert_prolonged_sound_mark_to_dash(data)
+    return unless @setting.enable_prolonged_sound_mark_to_dash
+    data.gsub!(/(ー{2,})/) do |match|
+      "―" * match.length
+    end
+  end
+
   #
   # 小説のルールに沿うように変換
   #
@@ -493,6 +501,15 @@ class ConverterBase
     data.gsub!(/。　/, "。")
   end
 
+  def should_word_be_hankaku?(word)
+    (word.length >= ENGLISH_SENTENCES_MIN_LENGTH || @setting.disable_alphabet_word_to_zenkaku) &&
+      word.match(/[a-z]/i)
+  end
+
+  def sentence?(match)
+    match.split(" ").size >= 2
+  end
+
   #
   # 半角アルファベットを全角に変換する
   #
@@ -508,8 +525,7 @@ class ConverterBase
       end
     else
       data.gsub!(ENGLISH_SENTENCES_CHARACTERS) do |match|
-        if match.split(" ").size >= 2 \
-           || (match.length >= ENGLISH_SENTENCES_MIN_LENGTH && match.match(/[a-z]/i))
+        if sentence?(match) || should_word_be_hankaku?(match)
           @english_sentences << match
           "［＃英文＝#{@english_sentences.size - 1}］"
         else
@@ -631,9 +647,9 @@ class ConverterBase
         top = "― "
         bottom = " ―"
       end
-      str = "　　　［＃ゴシック体］#{top}"
+      str = +"　　　#{top}"
       str += hankaku_num_to_zenkaku_num(chapter.tr("０-９", "0-9"))
-      str += "#{bottom}［＃ゴシック体終わり］"
+      str += "#{bottom}"
       # 前後に空行を入れたいが、それは行処理ループ中に行う
       symbols_to_zenkaku(str)
       index = @@count_of_rebuild_container += 1
@@ -649,7 +665,7 @@ class ConverterBase
   end
 
   def insert_blank_before_line_and_behind_to_special_chapter(line)
-    result = ""
+    result = +""
     if line =~ /［＃章見出しっぽい文＝/
       unless blank_line?(@before_line)
         result << "\n"
@@ -667,9 +683,7 @@ class ConverterBase
   end
 
   def border_symbol?(line)
-    @@symbols ||= open(File.join(Narou.get_preset_dir, "bordersymbols.txt"), "r:BOM|UTF-8") { |fp|
-      fp.read.strip
-    }
+    @@symbols ||= File.read(Narou.preset_dir.join("bordersymbols.txt"), encoding: "BOM|UTF-8")
     line =~ /^[ 　\t]*[#{@@symbols}]+$/
   end
 
@@ -681,7 +695,7 @@ class ConverterBase
   # ■などの区切りの前後には空行が必ず存在するようにする
   #
   def insert_blank_line_to_border_symbol(line)
-    result = ""
+    result = +""
     if border_symbol?(line)
       unless blank_line?(@before_line)
         result << "\n"
@@ -810,8 +824,8 @@ class ConverterBase
   # 改行がひとつもなかった場合は nil を返す
   #
   def join_inner_bracket(str)
-    joined_str = str.dup
     return nil if str.count("\n") == 0
+    joined_str = str.dup
     joined_str.gsub!(/([…―])\n/, "\\1。\n")
     joined_str = joined_str.split("\n").map { |s|
       s.sub(/^　+/, "")
@@ -858,7 +872,7 @@ class ConverterBase
   def auto_join_line(data)
     # 次の行の冒頭が開き記号だったら意図的な改行だと判断して連結しない
     # 行頭の全角スペースが２個以上の場合も連結しない
-    data.gsub!(/([^、])、\n　([^「『(（【<＜〈《≪・■…‥―　])/, "\\1、\\2")
+    data.gsub!(/([^、])、\n　([^「『(（【<＜〈《≪・■…‥―　１-９一-九])/, "\\1、\\2")
   end
 
   CHARACTER_OF_RUBY = "一-龠Ａ-Ｚａ-ｚA-Za-z"
@@ -1164,6 +1178,7 @@ class ConverterBase
     convert_fraction_and_date(data)
     modify_kana_ni_to_kanji_ni(data)
     convert_dakuten_char_to_font(data)
+    convert_prolonged_sound_mark_to_dash(data)
   end
 
   def before_convert(io)
@@ -1195,7 +1210,7 @@ class ConverterBase
   # 単語単位でzwsを挿入する
   #
   def insert_word_separator(str)
-    buffer = ""
+    buffer = +""
     ss = StringScanner.new(str)
     before_symbol = false
 
@@ -1256,7 +1271,7 @@ class ConverterBase
   # 文字単位でzwsを挿入する
   #
   def insert_char_separator(str)
-    buffer = ""
+    buffer = +""
     ss = StringScanner.new(str)
     before_symbol = false
     while char = ss.getch
@@ -1369,7 +1384,7 @@ class ConverterBase
         unless @delay_outputs_buffer.empty?
           @write_fp.write(@delay_outputs_buffer)
           @before_line = @delay_outputs_buffer
-          @delay_outputs_buffer = ""
+          @delay_outputs_buffer.clear
         else
           @before_line = line
         end
@@ -1427,21 +1442,5 @@ class ConverterBase
       result.gsub!(src, dst)
     end
     result
-  end
-
-  def dash_image_relative_paths(base_dir, output_text_dir)
-    DASH_FILES.map do |name|
-      pathname = Pathname(File.join(base_dir, name))
-      pathname.relative_path_from(Pathname(output_text_dir)).to_s
-    end
-  end
-
-  def copy_dash_images_to_local_setting_dir
-    DASH_FILES.each do |name|
-      path = File.join(Narou.local_setting_dir, name)
-      unless File.exist?(path)
-        FileUtils.copy(File.join(Narou.get_preset_dir, name), path)
-      end
-    end
   end
 end

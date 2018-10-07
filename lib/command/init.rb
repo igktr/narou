@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -32,7 +33,7 @@ module Command
         # no check here since global_setting is not loaded yet
         @options["aozora_dirname"] = dirname
       }
-      @opt.on("-l", "--line-height SIZE", "行の高さを変更する(単位em)。オススメは1.6〜1.8程度") do |line_height|
+      @opt.on("-l", "--line-height SIZE", "行の高さを変更する(単位em)。オススメは1.8") do |line_height|
         begin
           @options["line_height"] = Helper.string_cast_to_type(line_height, :float)
         rescue Helper::InvalidVariableType => e
@@ -54,7 +55,7 @@ module Command
     # 行の高さの調整
     narou init --line-height 1.8       # 行の高さを1.8emに設定(1.8文字分相当)
     # 行の高さなので、行間を1文字分あけたいという場合は 1+1 で 2 を指定する
-    # (デフォルト 1.6)
+    # (未設定のまま小説変換すると 1.6 で計算される)
     # 参考情報：Kindle Voyage で文字サイズ４番目の大きさの場合、
     #   1.6em : 1ページに15行
     #   1.8em : 1ページに13行
@@ -111,7 +112,7 @@ module Command
 
     def rewrite_aozoraepub3_files(aozora_path, line_height)
       # chuki_tag.txt の書き換え
-      custom_chuki_tag_path = File.join(Narou.get_preset_dir, "custom_chuki_tag.txt")
+      custom_chuki_tag_path = File.join(Narou.preset_dir, "custom_chuki_tag.txt")
       chuki_tag_path = File.join(aozora_path, "chuki_tag.txt")
       custom_chuki_tag = File.read(custom_chuki_tag_path, mode: "r:BOM|UTF-8")
       chuki_tag = File.read(chuki_tag_path, mode: "r:BOM|UTF-8")
@@ -130,7 +131,7 @@ module Command
       dst = ["AozoraEpub3.ini", "template/OPS/css_custom/vertical_font.css"]
       puts "(次のファイルをコピーor上書きしました)"
       src.size.times do |i|
-        src_full_path = File.join(Narou.get_preset_dir, src[i])
+        src_full_path = File.join(Narou.preset_dir, src[i])
         dst_full_path = File.join(aozora_path, dst[i])
         Helper.erb_copy(src_full_path, dst_full_path, binding)
         puts dst_full_path
@@ -156,13 +157,16 @@ module Command
     end
 
     def ask_line_height
-      line_height = Narou.line_height
+      # 後方互換のために未設定時の line_height デフォルトは 1.6 だが、
+      # オススメは 1.8 なので入力時のデフォルトは 1.8 にする
+      line_height = Narou.line_height(default: 1.8)
       puts
       puts(<<-MSG.termcolor)
 <bold><green>行間の調整を行います。小説の行の高さを設定して下さい(単位 em):</green></bold>
 1em = 1文字分の高さ
 行の高さ＝1文字分の高さ＋行間の高さ
-オススメは 1.6 〜 1.8 程度。1.6 で若干行間狭め。1.8 だと一般的な小説程度。2.0 くらいにするとかなりスカスカ
+オススメは 1.8
+1.6 で若干行間狭め。1.8 だと一般的な小説程度。2.0 くらいにするとかなりスカスカ
 (未入力で #{line_height} を採用)
       MSG
       print ">"

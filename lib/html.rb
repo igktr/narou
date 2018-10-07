@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -110,5 +111,9 @@ class HTML
 
   def delete_ruby_tag(text = @string)
     text.gsub(%r!<\/?(?:ruby|rb|rp|rt)>!, "")
+  end
+
+  def ln_to_br(text = @string)
+    text.to_s.gsub("\n", "<br>")
   end
 end

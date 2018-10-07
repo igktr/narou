@@ -7,11 +7,11 @@
 module Command
   class Trace < CommandBase
     def self.oneline_help
-      "エラーログを表示します"
+      "直前のバックトレースを表示します"
     end
 
     def initialize
-      super(" ")
+      super()
       @opt.separator <<-MSG
 
   ・エラーが発生した際に保存されたバックトレースログを表示します。

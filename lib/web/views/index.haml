@@ -19,16 +19,25 @@
             %li#action-view-setting
               %a(href="#") 表示する項目を設定
             %li.divider
+            %li#action-view-novel-list-wide
+              %a(href="#")
+                %span
+                  %span.active-ok.glyphicon.glyphicon-ok
+                  小説リストの幅を広げる
+                %span.shortcut W
+            %li.divider
             %li#action-view-nonfrozen
               %a(href="#")
                 %span
                   %span.active-ok.glyphicon.glyphicon-ok
                   凍結中以外を表示
+                %span.shortcut Shift+F
             %li#action-view-frozen
               %a(href="#")
                 %span
                   %span.active-ok.glyphicon.glyphicon-ok
                   凍結中を表示
+                %span.shortcut F
             %li.divider
             %li#action-view-toggle-setting-page-open-new-tab
               %a(href="#")
@@ -51,6 +60,10 @@
               %a(href="/edit_menu")
                 %span
                   個別メニューを編集...
+            %li#action-view-select-menu-style
+              %a(href="#")
+                %span
+                  個別メニューの表示スタイルを選択
             %li.divider
             %li#action-view-reset
               %a(href="/") 表示設定を全てリセット
@@ -59,7 +72,7 @@
             選択
             %span#badge-number-of-selecting.badge 0
             %span.caret
-          %ul#dropdown-menu-select.dropdown-menu(role="menu")
+          %ul.dropdown-menu-wide.dropdown-menu(role="menu")
             %li#action-select-view
               %a(href="#")
                 %span 表示されている小説を選択
@@ -102,7 +115,9 @@
             %li#action-tag-edit.enable-selected
               %a(href="#")
                 %span
-                  選択した小説のタグを編集
+                  %span
+                    選択した小説のタグを編集
+                %span.shortcut T
         %li.dropdown
           %a.dropdown-toggle(data-toggle="dropdown" href="#")
             ツール
@@ -165,9 +180,7 @@
                 %span
                   %span.glyphicon.glyphicon-off
                   サーバをシャットダウン
-      %p#queue-text.navbar-text.navbar-right(data-toggle="tooltip" title="キューに積まれた処理の数")
-        %span.glyphicon.glyphicon-inbox
-        %span#queue 0
+      = partial :queue
       .navbar-form.navbar-right(role="search")
         .form-group
           .input-group
@@ -192,13 +205,23 @@
 
   -# コンソール
   #console-container
-    #console.console
-    #console-buttons.console-buttons
-      %span.queue-cancel.glyphicon.glyphicon-remove-circle(data-toggle="tooltip" title="処理を中断")
-      %span.console-trash.glyphicon.glyphicon-trash(data-toggle="tooltip" title="ログと履歴を削除")
-      %span.console-expand
-        %span.glyphicon.glyphicon-resize-full(data-toggle="tooltip" title="拡大")
-        %span.glyphicon.glyphicon-resize-small.hide(data-toggle="tooltip" title="縮小")
+    - console_stdout = capture_haml do
+      #console.console
+      #console-buttons.console-buttons
+        %span.queue-cancel.glyphicon.glyphicon-remove-circle(data-toggle="tooltip" title="処理を中断")
+        %span.console-history.glyphicon.glyphicon-cloud-download(data-toggle="tooltip" title="全ての履歴を取得")
+        %span.console-trash.glyphicon.glyphicon-trash(data-toggle="tooltip" title="表示と履歴を削除")
+        %span.console-expand
+          %span.glyphicon.glyphicon-resize-full(data-toggle="tooltip" title="拡大")
+          %span.glyphicon.glyphicon-resize-small.hide(data-toggle="tooltip" title="縮小")
+    - if Narou.concurrency_enabled?
+      .row
+        .col-xs-7.console-col-left
+          = console_stdout
+        .col-xs-5.console-col-right
+          #console-stdout2.console
+    - else
+      = console_stdout
 
   -# 操作パネル
   #control-panel
@@ -235,13 +258,22 @@
           %span.glyphicon.glyphicon-refresh
       .btn-group
         %button.button-send.btn.btn-warning(type="button" data-toggle="tooltip") Send
-        - if Inventory.load("local_setting")["hotentry"]
+        :ruby
+          menus = []
+          if Inventory.load["hotentry"]
+            menus << ["button-send-hotentry", "hotentry を送信"]
+          end
+          if Inventory.load["device"] == "kindle"
+            menus << ["button-send-backup-bookmark", "端末の栞データをバックアップ"]
+          end
+        - unless menus.empty?
           %button.btn.btn-warning.dropdown-toggle(type="button" data-toggle="dropdown")
             %span.caret
             %span.sr-only Toggle Dropdown
           %ul.dropdown-menu(role="menu")
-            %li
-              %a.button-send-hotentry(href="#") hotentry を送信
+            - menus.each do |klass, label|
+              %li
+                %a{ href: "#", class: klass }= label
       .btn-group
         %button.btn.btn-info.dropdown-toggle.enable-selected(type="button" data-toggle="dropdown")
           Freeze
@@ -286,6 +318,7 @@
           %li
             %a.button-eject-now(href="#") 今すぐ端末を取り出す
 
+.container.container-main.theme-showcase#novel-list-container(role="main")
   -# 小説の一覧テーブル
   %div
     %table#novel-list.dataTable.table.table-bordered(cellspacing="0" width="100%")
@@ -301,20 +334,6 @@
     %a(href="#") 反転
   %li#rect-select-menu-cancel
     %a(href="#") キャンセル
-
--# 個別表示用コンソール
-#console-dialog.modal.fade(tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true")
-  .modal-dialog
-    .modal-content
-      .modal-header
-        %button(type="button" class="close" data-dismiss="modal")
-          %span(aria-hidden="true") &times;
-          %span.sr-only Close
-        %h4.modal-title サブコンソール
-      .modal-body
-        #each-console.console
-      .modal-footer
-        %button.btn.btn-primary(type="button" data-dismiss="modal") 閉じる
 
 %ul#select-color-menu.dropdown-menu(role="menu")
   %li

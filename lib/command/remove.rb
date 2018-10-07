@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -60,10 +61,7 @@ module Command
         end
         argv += novels.map { |n| n["id"].to_s }
       end
-      if argv.empty?
-        puts @opt.help
-        return
-      end
+      display_help! if argv.empty?
       tagname_to_ids(argv)
       argv.each_with_index do |target, i|
         Helper.print_horizontal_rule if i > 0
@@ -73,7 +71,10 @@ module Command
           next
         end
         title = data["title"]
-        if Narou.novel_frozen?(target)
+        if Narou.locked?(target)
+          error "#{title} は変換中なため削除出来ませんでした"
+          next
+        elsif Narou.novel_frozen?(target)
           puts "#{title} は凍結中です\n削除を中止しました"
           next
         end

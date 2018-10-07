@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -8,6 +9,7 @@ require_relative "../downloader"
 require_relative "../novelconverter"
 require_relative "../inventory"
 require_relative "../kindlestrip"
+require_relative "../worker"
 
 module Command
   class Convert < CommandBase
@@ -24,23 +26,23 @@ module Command
     LOG_FILENAME_FORMAT = "convert_log_%s.txt"
 
     def self.display_sending_error_list
-      puts
-      puts "-" * 79
-      puts "・送信失敗リスト"
-      puts @@sending_error_list
-      puts
-      puts "<red><bold>上記のファイルの送信に失敗しました。</bold></red>".termcolor
-      puts "送信出来なかった原因を解消し、send コマンドを実行して下さい。"
+      return unless exists_sending_error_list?
+      $stdout2.puts <<~MSG
+        #{"=" * 79}
+        ・送信失敗リスト
+        #{@@sending_error_list.join("\n")}
+
+      MSG
+      $stdout2.puts "<red><bold>上記のファイルの送信に失敗しました。</bold></red>".termcolor
+      $stdout2.puts <<~MSG
+        送信出来なかった原因を解消し、send コマンドを実行して下さい。
+        #{"=" * 79}
+      MSG
       @@sending_error_list.clear
-      if $stdin.tty? && Narou.web?.!
-        puts
-        puts "（何かキーを押して下さい）"
-        $stdin.getch
-      end
     end
 
     def self.exists_sending_error_list?
-      @@sending_error_list.empty?.!
+      @@sending_error_list.present?
     end
 
     def initialize
@@ -114,12 +116,29 @@ module Command
       EOS
     end
 
+    def self.execute!(*argv, io: $stdout2, sync: false)
+      if sync
+        # cocurrency が有効だろうが必ず同期実行する
+        status = super(*argv, io: io)
+        yield if block_given?
+        status
+      else
+        Narou.concurrency_call do
+          status = super(*argv, io: io)
+          yield if block_given?
+          status
+        end
+      end
+    end
+
     def execute(argv)
       super
-      if argv.empty?
-        puts @opt.help
-        return
-      end
+      init(argv)
+      main(argv)
+    end
+
+    def init(argv)
+      display_help! if argv.empty?
       @output_filename = @options["output"]
       if @output_filename
         @ext = File.extname(@output_filename)
@@ -127,121 +146,126 @@ module Command
       else
         @basename = nil
       end
-      if @options["encoding"]
-        @enc = Encoding.find(@options["encoding"]) rescue nil
-        unless @enc
-          error "--enc で指定された文字コードは存在しません。sjis, eucjp, utf-8 等を指定して下さい"
-          return
-        end
-      end
+      return unless @options["encoding"]
+      @enc = Encoding.find(@options["encoding"]) rescue nil
+      return if @enc
+      $stdout2.error "--enc で指定された文字コードは存在しません。sjis, eucjp, utf-8 等を指定して下さい"
+    end
 
-      @multi_device = @options["multi-device"]
-      device_names = if @multi_device
-                       @multi_device.split(",").map(&:strip).map(&:downcase).select { |name|
-                         Device.exists?(name).tap { |this|
-                           unless this
-                             error "[convert.multi-device] #{name} は有効な端末名ではありません"
-                           end
-                         }
-                       }
-                     else
-                       [nil]   # nil で device 設定が読まれる
-                     end
-      # kindle用のmobiを作る過程でepubが作成され、上書きされてしまうので、最初に作るようにする
-      kindle = device_names.delete("kindle")
-      device_names.unshift(kindle) if kindle
-
-      if @multi_device && device_names.empty?
-        error "有効な端末名がひとつもありませんでした"
-        exit Narou::EXIT_ERROR_CODE
-      end
-
-      device_names.each do |name|
+    def main(argv)
+      build_device_names.each do |name|
         @device = Narou.get_device(name)
         if name
-          puts "<bold><magenta>&gt;&gt; #{@device.display_name}用に変換します</magenta></bold>".termcolor
+          $stdout2.puts "<bold><magenta>&gt;&gt; #{@device.display_name}用に変換します</magenta></bold>".termcolor
         end
         self.extend(@device.get_hook_module) if @device
         hook_call(:change_settings)
         convert_novels(argv)
       end
-
+      return unless @options["multi-device"]
       # device の設定に戻す
-      if @multi_device
-        device = Narou.get_device
-        force_change_settings_function(device.get_relative_variables) if device
+      device = Narou.get_device
+      force_change_settings_function(device.get_relative_variables) if device
+    end
+
+    def build_device_names
+      multi_device = @options["multi-device"]
+      device_names = if multi_device
+                       multi_device.split(",").map(&:strip).map(&:downcase).select do |name|
+                         Device.exists?(name).tap do |this|
+                           unless this
+                             $stdout2.error "[convert.multi-device] #{name} は有効な端末名ではありません"
+                           end
+                         end
+                       end
+                     else
+                       [nil] # nil で device 設定が読まれる
+                     end
+      # kindle用のmobiを作る過程でepubが作成され、上書きされてしまうので、最初に作るようにする
+      kindle = device_names.delete("kindle")
+      device_names.unshift(kindle) if kindle
+      if multi_device && device_names.empty?
+        $stdout2.error "有効な端末名がひとつもありませんでした"
+        exit Narou::EXIT_ERROR_CODE
       end
+      device_names
     end
 
     def change_settings
       return unless @device
-      if @multi_device
+      if @options["multi-device"]
         force_change_settings_function(@device.get_relative_variables)
       end
     end
 
     def convert_novels(argv)
       tagname_to_ids(argv)
-      argv.each.with_index(1) do |target, i|
-        @target = target
-        @novel_data = nil
-
-        Helper.print_horizontal_rule if i > 1
-        if @basename
-          @basename << " (#{i})" if argv.length > 1
-          @output_filename = @basename + @ext
-        end
-
-        if File.file?(target.to_s)
-          using_send_command = false
-          # not remove output files for text file conversion
-          res = convert_txt(target)
-        else
-          using_send_command = true
-          # remove output files for novel conversion
-          NovelConverter.extensions_of_converted_files(@device).each do |ext|
-            ebook_paths = Narou.get_ebook_file_paths(target, ext)
-            NovelConverter.clean_up_temp_files(ebook_paths)
-          end
-          # start novel conversion
-          @argument_target_type = :novel
-          unless Downloader.novel_exists?(target)
-            error "#{target} は存在しません"
-            next
-          end
-          res = NovelConverter.convert(target, {
-                  output_filename: @output_filename,
-                  display_inspector: @options["inspect"],
-                  ignore_force: @options["ignore-force"],
-                  ignore_default: @options["ignore-default"],
-                })
-          @novel_data = Downloader.get_data_by_target(target)
-          @options["yokogaki"] = NovelSetting.load(target)["enable_yokogaki"]
-        end
-        next unless res
-        array_of_converted_txt_path = res[:converted_txt_paths]
-        ebook_file = nil
-        array_of_converted_txt_path.each do |converted_txt_path|
-          @converted_txt_path = converted_txt_path
-          @use_dakuten_font = res[:use_dakuten_font]
-
-          ebook_file = hook_call(:convert_txt_to_ebook_file)
-          next if ebook_file.nil?
-          if ebook_file
-            copy_to_converted_file(ebook_file)
-            send_file_to_device(ebook_file) unless using_send_command
-          end
-        end
-        send_file_to_device(ebook_file) if
-          using_send_command && ebook_file
-
-        if @options["no-open"].! && Narou.web?.!
-          Helper.open_directory(File.dirname(@converted_txt_path), "小説の保存フォルダを開きますか")
+      argv.each.with_index(1) do |target, index|
+        Narou.lock(target) do
+          convert_novel_main(target, index)
         end
       end
     rescue Interrupt
-      puts "変換を中断しました"
+      $stdout2.puts "変換を中断しました"
       exit Narou::EXIT_INTERRUPT
+    end
+
+    def convert_novel_main(target, index)
+      @target = target
+      @novel_data = nil
+
+      Helper.print_horizontal_rule($stdout2) if index > 1
+      if @basename
+        @basename << " (#{index})" if argv.length > 1
+        @output_filename = @basename + @ext
+      end
+
+      if File.file?(target.to_s)
+        using_send_command = false
+        # not remove output files for text file conversion
+        res = convert_txt(target)
+      else
+        using_send_command = true
+        unless Downloader.novel_exists?(target)
+          $stdout2.error "#{target} は存在しません"
+          return
+        end
+        # remove output files for novel conversion
+        NovelConverter.extensions_of_converted_files(@device).each do |ext|
+          ebook_paths = Narou.get_ebook_file_paths(target, ext)
+          NovelConverter.clean_up_temp_files(ebook_paths)
+        end
+        # start novel conversion
+        @argument_target_type = :novel
+        res = NovelConverter.convert(target, {
+                output_filename: @output_filename,
+                display_inspector: @options["inspect"],
+                ignore_force: @options["ignore-force"],
+                ignore_default: @options["ignore-default"],
+              })
+        @novel_data = Downloader.get_data_by_target(target)
+        @options["yokogaki"] = NovelSetting.load(target)["enable_yokogaki"]
+      end
+      return unless res
+      array_of_converted_txt_path = res[:converted_txt_paths]
+      ebook_file = nil
+      array_of_converted_txt_path.each do |converted_txt_path|
+        @converted_txt_path = converted_txt_path
+        @use_dakuten_font = res[:use_dakuten_font]
+
+        ebook_file = hook_call(:convert_txt_to_ebook_file)
+        next if ebook_file.nil?
+        if ebook_file
+          copy_to_converted_file(ebook_file)
+          send_file_to_device(ebook_file) unless using_send_command
+        end
+      end
+      send_file_to_device(ebook_file) if
+        using_send_command && ebook_file
+
+      if @options["no-open"].! && Narou.web?.!
+        Helper.open_directory(File.dirname(@converted_txt_path), "小説の保存フォルダを開きますか")
+      end
     end
 
     #
@@ -257,17 +281,19 @@ module Command
              })
     rescue ArgumentError => e
       if e.message =~ /invalid byte sequence in UTF-8/
-        error "テキストファイルの文字コードがUTF-8ではありません。" +
-              "--enc オプションでテキストの文字コードを指定して下さい"
+        $stdout2.error "テキストファイルの文字コードがUTF-8ではありません。" \
+                       "--enc オプションでテキストの文字コードを指定して下さい"
         warn "(#{e.message})"
         return nil
       else
         raise
       end
     rescue Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError
-      warn "#{target}:"
-      error "テキストファイルの文字コードは#{@options["encoding"]}ではありませんでした。" +
-            "正しい文字コードを指定して下さい"
+      $stdout2.error <<~ERR
+        #{target}:
+        テキストファイルの文字コードは#{@options["encoding"]}ではありませんでした。
+        正しい文字コードを指定して下さい
+      ERR
       return nil
     end
 
@@ -292,15 +318,15 @@ module Command
     #
     # convert.copy-to で指定されたディレクトリに書籍データをコピーする
     #
-    def copy_to_converted_file(src_path)
+    def copy_to_converted_file(src_path, io: $stdout2)
       copy_to_dir = get_copy_to_directory
       return nil unless copy_to_dir
       FileUtils.copy(src_path, copy_to_dir)
       copied_file_path = File.join(copy_to_dir, File.basename(src_path))
-      puts copied_file_path.encode(Encoding::UTF_8) + " へコピーしました"
+      io.puts copied_file_path.to_s.encode(Encoding::UTF_8) + " へコピーしました"
       copied_file_path
     rescue NoSuchDirectory => e
-      error "#{e.message} はフォルダではないかすでに削除されています。コピー出来ませんでした"
+      io.error "#{e.message} はフォルダではないかすでに削除されています。コピー出来ませんでした"
       nil
     end
 
@@ -308,7 +334,7 @@ module Command
     # 書籍ファイルのコピー先を取得
     #
     # copy-to が設定されていなければ nil を返す。
-    # 存在しないディレクトリだった場合は例外を投げる
+    # copy-to が存在しないディレクトリだった場合は例外を投げる
     #
     def get_copy_to_directory
       # 2.1.0 から convert.copy_to から convert.copy-to へ名称が変更された
@@ -318,36 +344,55 @@ module Command
       unless File.directory?(copy_to_dir)
         raise NoSuchDirectory, copy_to_dir
       end
-      # deviceごとにフォルダ振り分けの処理
-      if !@options["copy-to-grouping"] || !@device
-        return copy_to_dir
+
+      dirs = [copy_to_dir]
+      gvalues = grouping_values
+      if gvalues.device && @device
+        dirs << @device.display_name
       end
-      copy_to_dir_with_device = File.join(copy_to_dir, @device.display_name)
-      unless File.directory?(copy_to_dir_with_device)
-        FileUtils.mkdir(copy_to_dir_with_device)
+      if gvalues.site && @novel_data
+        dirs << @novel_data["sitename"]
       end
-      copy_to_dir_with_device
+      copy_to_dir_with_groups = File.join(dirs)
+      unless File.directory?(copy_to_dir_with_groups)
+        FileUtils.mkdir_p(copy_to_dir_with_groups)
+      end
+      copy_to_dir_with_groups
     end
     private :get_copy_to_directory
 
-    def send_file_to_device(ebook_file)
+    def grouping_values
+      result = OpenStruct.new
+      grouping = @options["copy-to-grouping"]
+      if grouping.is_a?(TrueClass)
+        # 後方互換維持用
+        result.device = true
+        return result
+      end
+      grouping.to_s.split(",").map(&:strip).each do |key|
+        result[key] = true
+      end
+      result
+    end
+
+    def send_file_to_device(ebook_file, io: $stdout2)
       if @device && @device.physical_support? &&
         @device.connecting? && File.extname(ebook_file) == @device.ebook_file_ext
         if @argument_target_type == :novel
-          if Send.execute!(@device.name, @target) > 0
+          if Send.execute!(@device.name, @target, io: io) > 0
             @@sending_error_list << ebook_file
           end
         else
-          puts @device.name + "へ送信しています"
+          io.puts @device.name + "へ送信しています"
           copy_to_path = nil
           begin
             copy_to_path = @device.copy_to_documents(ebook_file)
           rescue Device::SendFailure
           end
           if copy_to_path
-            puts copy_to_path.encode(Encoding::UTF_8) + " へコピーしました"
+            io.puts copy_to_path.to_s.encode(Encoding::UTF_8) + " へコピーしました"
           else
-            error "送信に失敗しました"
+            io.error "送信に失敗しました"
             @@sending_error_list << ebook_file
           end
         end

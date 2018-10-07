@@ -2,7 +2,8 @@
 :javascript
   local_initialize_functions.push(function($) {
     var stream_console = new Narou.Console({
-      restore: false, buttons: false
+      restore: false, buttons: false,
+      stream_id: Narou.concurrencyIsEnabled() ? "stdout2" : "stdout"
     });
     var action = new Narou.Action(null);
     var storage = new Narou.Storage;
@@ -66,9 +67,7 @@
           %input.btn.btn-info(type="submit" value="設定を保存" style="margin-left: 50px")
           %button#btn-convert.btn.btn-default この小説を変換
           %button#btn-folder.btn.btn-default フォルダを開く
-        %p#queue-text.navbar-text.navbar-right(data-toggle="tooltip" title="キューに積まれた処理の数" data-placement="bottom")
-          %span.glyphicon.glyphicon-inbox
-          %span#queue 0
+        = partial :queue
 
   .container.container-main.theme-showcase(role="main")
     %p.visible-xs-inline
@@ -87,17 +86,24 @@
           ・環境設定で force.* 系設定が有効になっている場合、ここでの該当項目は無視されます<br>
         .list-group
           - @original_settings.each do |original|
-            - name = original[:name]
-            - value = @novel_setting[name]
-            - help = original[:help].strip.gsub("\n", "<br>")
-            - list_group_item_style = {}
-            - force_value = @force_settings[name]
-            - if @error_list[name]
-              - list_group_item_style = {class: "has-error", style: "background-color:#f2dede"}
-            - elsif force_value.nil?.!
-              - list_group_item_style = {style: "background-color: #fcf8e3"}
+            :ruby
+              name = original[:name]
+              value = @novel_setting[name]
+              help = original[:help].strip.gsub("\n", "<br>")
+              list_group_item_style = {}
+              force_value = @force_settings[name]
+              list_group_item_style =
+                if @error_list[name]
+                  { class: "has-error", style: "background-color:#f2dede" }
+                elsif force_value.nil?.!
+                  { style: "background-color: #fcf8e3" }
+                else
+                  {}
+                end
+              list_group_item_style[:id] = "#{name}"
+
             .list-group-item.form-group{list_group_item_style}
-              %h4.list-group-item-heading #{name}
+              %h4.list-group-item-heading= name
               .list-group-item-text
                 - case original[:type]
                 - when :boolean

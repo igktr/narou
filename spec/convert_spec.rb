@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
-# auto generated at 2018-05-16 15:45:40 +0900
+# auto generated at 2018-09-15 00:50:43 +0900
 
 Encoding.default_external = Encoding::UTF_8
 
@@ -24,7 +25,7 @@ describe "convert" do
   after :all do
     # 変換した際に出力される各ファイルを削除
     unless $debug
-      glob_path = "*/\\[#{AUTHOR}\\]*.txt\0*/{見出しリスト,調査ログ}.txt"
+      glob_path = +"*/\\[#{AUTHOR}\\]*.txt\0*/{見出しリスト,調査ログ}.txt"
       glob_path.encode!("Windows-31J") if RbConfig::CONFIG["host_os"] =~ /mswin(?!ce)|mingw|bccwin/i
       Dir.glob(glob_path) do |path|
         File.delete(path)
@@ -85,6 +86,10 @@ describe "convert" do
     check_answer("english/test_english.txt")
   end
 
+  it "disable_alphabet_word_to_zenkaku/test_disable_alphabet_word_to_zenkaku.txt" do
+    check_answer("disable_alphabet_word_to_zenkaku/test_disable_alphabet_word_to_zenkaku.txt")
+  end
+
   it "auto_join_line/test_auto_join_line.txt" do
     check_answer("auto_join_line/test_auto_join_line.txt")
   end
@@ -115,6 +120,10 @@ describe "convert" do
 
   it "ruby/test_ruby.txt" do
     check_answer("ruby/test_ruby.txt")
+  end
+
+  it "convert_prolonged_sound_mark_to_dash/test_convert_prolonged_sound_mark_to_dash.txt" do
+    check_answer("convert_prolonged_sound_mark_to_dash/test_convert_prolonged_sound_mark_to_dash.txt")
   end
 
   it "insert_separator/test_insert_separator.txt" do

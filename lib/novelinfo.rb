@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -9,7 +10,7 @@ require_relative "html"
 
 class NovelInfo
   REFRESH_INTERVAL = 10 # キャッシュを捨てて再取得するまでの時間(s)
-  DEFAULT_OF = "t-nt-ga-s-gf-nu-gl-w-l"
+  DEFAULT_OF = "t-nt-ga-s-gf-nu-gl-w-l-e-sitename"
   @@novel_info_parameters = {}
 
   def self.load(setting, toc_source: nil, of: DEFAULT_OF)
@@ -74,6 +75,7 @@ class NovelInfo
     %w(general_firstup novelupdated_at general_lastup).each do |elm|
       result[elm] = Helper.date_string_to_time(@setting[elm])
     end
+    result["sitename"] = @setting["sitename"]
 
     result
   end

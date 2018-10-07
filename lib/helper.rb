@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -15,6 +16,7 @@ module Helper
 
   HOST_OS = RbConfig::CONFIG["host_os"]
   FILENAME_LENGTH_LIMIT = 50
+  FOLDER_LENGTH_LIMIT = 50
 
   def os_windows?
     @@os_is_windows ||= HOST_OS =~ /mswin(?!ce)|mingw|bccwin/i
@@ -68,7 +70,7 @@ module Helper
     end
     case determine_os
     when :windows
-      system(%!explorer "file:///#{path.encode(Encoding::Windows_31J)}"!)
+      system(%!explorer "file:///#{path}"!.encode(Encoding::Windows_31J))
     when :cygwin
       system(%!cygstart "#{path}"!)
     when :mac
@@ -93,8 +95,10 @@ module Helper
     end
   end
 
-  def print_horizontal_rule
-    puts "―" * 35
+  HR_TEXT = "―" * 35
+
+  def print_horizontal_rule(io = $stdout)
+    io.puts HR_TEXT
   end
 
   def replace_filename_special_chars(str, invalid_replace = false)
@@ -330,7 +334,7 @@ module Helper
   # 数字やスペース、句読点、感嘆符はそのままにする
   #
   def to_unprintable_words(string, mask = "●")
-    result = "".dup
+    result = +""
     string.each_char do |char|
       result += case char
                 when /[0-9０-９ 　、。!?！？]/
@@ -346,7 +350,8 @@ module Helper
   # 長過ぎるファイルパスを詰める
   # ファイル名部分のみを詰める。拡張子は維持する
   #
-  def truncate_path(path, limit = FILENAME_LENGTH_LIMIT)
+  def truncate_path(path, limit = Inventory.load["filename-length-limit"])
+    limit ||= FILENAME_LENGTH_LIMIT
     dirname = File.dirname(path)
     extname = File.extname(path)
     basename = File.basename(path, extname)
@@ -357,6 +362,12 @@ module Helper
     else
       path
     end
+  end
+
+  def truncate_folder_title(title, limit = Inventory.load["folder-length-limit"])
+    limit ||= FOLDER_LENGTH_LIMIT
+    return title if title.length <= limit
+    title[0...limit]
   end
 
   #
@@ -398,11 +409,11 @@ module Helper
           loop do
             block.call if block
             sleep(sleep_time)
-            if Narou::Worker.canceled?
-              Process.kill("KILL", pid)
-              Process.detach(pid)
-              break
-            end
+            next unless Narou::Worker.canceled?
+            next unless Narou::WebWorker.canceled?
+            Process.kill("KILL", pid)
+            Process.detach(pid)
+            break
           end
         end
         looper.join
@@ -411,17 +422,22 @@ module Helper
       stdout.force_encoding(Encoding::UTF_8)
       stderr.force_encoding(Encoding::UTF_8)
       return [stdout, stderr, status]
+    rescue RuntimeError => e
+      raise unless e.message.include?("interrupted")
+      process_kill(_pid)
+      raise Interrupt
     rescue Interrupt
-      if _pid
-        begin
-          Process.kill("KILL", _pid)
-          Process.detach(_pid)    # 死亡確認しないとゾンビ化する
-        rescue
-        end
-      end
+      process_kill(_pid)
       raise
     ensure
-      looper.kill if looper
+      looper&.kill
+    end
+
+    def self.process_kill(pid)
+      return unless pid
+      Process.kill("KILL", pid)
+      Process.detach(pid) # 死亡確認しないとゾンビ化する
+    rescue
     end
   end
 
@@ -516,4 +532,3 @@ module Helper
     end
   end
 end
-

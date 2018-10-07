@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 #
 # Copyright 2013 whiteleaf. All rights reserved.
 #
@@ -6,6 +7,7 @@
 require "fileutils"
 require_relative "ini"
 require_relative "downloader"
+require_relative "converterbase"
 
 class NovelSetting
   INI_NAME = "setting.ini"
@@ -44,7 +46,7 @@ class NovelSetting
     if File.directory?(target.to_s)
       archive_path = target
     else
-      archive_path = Downloader.get_novel_data_dir_by_target(target).to_s
+      archive_path = Downloader.get_novel_data_dir_by_target(target) || ""
     end
     @archive_path = File.expand_path(archive_path)
     @ignore_force = ignore_force
@@ -58,7 +60,9 @@ class NovelSetting
   end
 
   def load_setting_ini
-    Ini.load_file(ini_path) rescue Ini.load("")
+    Ini.load_file(ini_path)
+  rescue Errno::ENOENT
+    Ini.load("")
   end
 
   #
@@ -256,7 +260,13 @@ class NovelSetting
       name: "enable_alphabet_force_zenkaku",
       type: :boolean,
       value: false,
-      help: "アルファベットを強制的に全角にする。falseの場合英文は半角、それ以外は全角になる"
+      help: "アルファベットを強制的に全角にする。false の場合は英文は半角、#{::ConverterBase::ENGLISH_SENTENCES_MIN_LENGTH}文字未満の英単語は全角になる"
+    },
+    {
+      name: "disable_alphabet_word_to_zenkaku",
+      type: :boolean,
+      value: false,
+      help: "enable_alphabet_force_zenkaku が false の場合に、#{::ConverterBase::ENGLISH_SENTENCES_MIN_LENGTH}文字未満の英単語を全角にする機能を抑制する。英文中にルビがふってあり、英文ではなく英単語と認識されて全角化されてしまう場合などに使用"
     },
     {
       name: "enable_half_indent_bracket",
@@ -340,7 +350,7 @@ class NovelSetting
       name: "date_format",
       type: :string,
       value: "%Y年%m月%d日",
-      help: "書式は http://bit.ly/1m5e3w7 を参考"
+      help: "書式は http://bit.ly/date_format を参考"
     },
     {
       name: "enable_convert_horizontal_ellipsis",
@@ -382,15 +392,15 @@ class NovelSetting
       name: "title_date_format",
       type: :string,
       value: "(%-m/%-d)",
-      help: <<-EOS
-enable_add_date_to_title で付与する日付のフォーマット。書式は http://bit.ly/1m5e3w7 を参照。
-Narou.rb専用の書式として下記のものも使用可能。
-$s 2045年までの残り時間(10分単位の4桁の36進数)
-$t 小説のタイトル
-$ns 小説が掲載されているサイト名
-$nt 小説種別（短編 or 連載）
-$ntag 小説のタグをカンマ区切りにしたもの
-      EOS
+      help: <<~HELP
+        enable_add_date_to_title で付与する日付のフォーマット。書式は http://bit.ly/date_format を参照。
+        Narou.rb専用の書式として下記のものも使用可能。
+        $t 小説のタイトル($tを使った場合はtitle_date_alignは無視される)
+        $s 2045年までの残り時間(10分単位の4桁の36進数)
+        $ns 小説が掲載されているサイト名
+        $nt 小説種別（短編 or 連載）
+        $ntag 小説のタグをカンマ区切りにしたもの
+      HELP
     },
     {
       name: "title_date_align",
@@ -449,6 +459,12 @@ $ntag 小説のタグをカンマ区切りにしたもの
       type: :boolean,
       value: false,
       help: "完結済み小説のタイトルに(完結)と表示する"
+    },
+    {
+      name: "enable_prolonged_sound_mark_to_dash",
+      type: :boolean,
+      value: false,
+      help: "長音記号を２つ以上つなげている場合に全角ダッシュに置換する"
     },
     {
       name: "cut_old_subtitles",

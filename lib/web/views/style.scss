@@ -691,6 +691,11 @@ $console-color: white;
     margin-bottom: 7px;
   }
 }
+
+#console-stdout2 .progress {
+  width: 100%;
+}
+
 .console-buttons {
   position: absolute;
   top: 3px;
@@ -698,9 +703,17 @@ $console-color: white;
   color: $console-color;
   cursor: pointer;
 
+  text-shadow: 1px 1px 2px #000, -1px 1px 2px #000, 1px -1px 2px #000, -1px -1px 2px #000;
+
   span:hover {
     color: mix($console-color, red, 80%);
   }
+}
+
+.console-col-left,
+.console-col-right {
+  padding-left: 1px;
+  padding-right: 1px;
 }
 
 /*
@@ -714,7 +727,7 @@ $console-color: white;
  * ショートカットキー
  */
 @media (min-width:768px) {
-  #dropdown-menu-select {
+  .dropdown-menu-wide {
     width: 300px;
   }
   .shortcut {
@@ -723,7 +736,9 @@ $console-color: white;
     left: auto;
   }
   /* Freifox で表示が崩れる対策 */
-  ul.dropdown-menu {
+  .navbar-nav ul.dropdown-menu {
+    min-width: 260px;
+
     & > li {
       a > span:first-child {
         float: left;
@@ -828,18 +843,19 @@ $console-color: white;
  * 個別メニュー
  */
 .context-menu {
-  z-index: 102;
+  z-index: 1050;
 }
 
 /*
  * キュー
  */
-#queue-text {
+.queue {
   position: relative;
   margin-right: 0;
   cursor: default;
 }
-#queue {
+
+.queue__sizes {
   position: relative;
   font-size: 0.8em;
   vertical-align: top;
@@ -854,6 +870,26 @@ $console-color: white;
   border-radius: 14px;
   left: -3px;
   top: -3px;
+}
+
+.queue__size {
+}
+
+.queue__size--default {
+}
+
+.queue__size--divider {
+  padding-right: 1px;
+  padding-left: 1px;
+  position: relative;
+  top: -1px;
+
+  &::before {
+    content: ':';
+  }
+}
+
+.queue__size--convert {
 }
 
 /*
@@ -1150,4 +1186,25 @@ $console-color: white;
 
 .add-filter {
   cursor: copy;
+}
+
+.popover {
+  max-width: 50%;
+}
+
+.move-to-top {
+  position: fixed;
+  right: 6px;
+  bottom: 6px;
+  width: 40px;
+  height: 40px;
+  background-color: black;
+  border-radius: 5px;
+  font-size: 26px;
+  color: white;
+  padding-top: 4px;
+  padding-left: 6px;
+  cursor: pointer;
+  @include opacity(0.3);
+  z-index: 1040;
 }

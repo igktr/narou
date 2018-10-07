@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # frozen_string_literal: true
 
 #
@@ -213,9 +212,6 @@ module Command
           convert_status = Convert.execute!(convert_argv)
           if convert_status > 0
             # 変換が失敗したか、中断された
-puts "------------------------------------"
-puts "-------- 変換に失敗しました --------"
-puts "------------------------------------"
             data["_convert_failure"] = true
             # 中断された場合には残りのアップデートも中止する
             raise Interrupt if convert_status == Narou::EXIT_INTERRUPT
@@ -228,7 +224,6 @@ puts "------------------------------------"
         Database.instance.save_database
         process_hotentry(hotentry_manager.hotentries)
       end
-      puts "アップデートを完了しました"
 
       exit mistook_count if mistook_count > 0
     rescue Interrupt

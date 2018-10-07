@@ -21,10 +21,6 @@ module Command
 
     @@sending_error_list = []
 
-    LOG_DIR_NAME = "log"
-    LOG_NUM_LIMIT = 30   # ログの保存する上限数
-    LOG_FILENAME_FORMAT = "convert_log_%s.txt"
-
     def self.display_sending_error_list
       return unless exists_sending_error_list?
       $stdout2.puts <<~MSG

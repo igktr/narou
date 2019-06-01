@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # frozen_string_literal: true
 
 #
@@ -235,7 +236,9 @@ module Narou
         novel_setting.novel_title.presence || novel_data["title"],
         true
       )
-      "[#{author}] #{title}#{ext}"
+#      "[#{author}] #{title}#{ext}"
+      temp_title = Helper.truncate_path(title, limit - author.length + 1)
+      "[#{author}] #{temp_title}#{ext}"
     end
   end
 

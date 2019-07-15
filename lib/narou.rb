@@ -205,6 +205,7 @@ module Narou
   # 設定しない場合は id カラムが必須
   #
   def create_novel_filename(novel_data, ext = "")
+    limit = Inventory.load["filename-length-limit"]
     filename_to_ncode = Inventory.load("local_setting")["convert.filename-to-ncode"]
     novel_setting =
       if novel_data["id"]
